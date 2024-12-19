@@ -24,7 +24,7 @@ RUN apt-get -y -qq update && \
         ca-certificates \
         chromium \
         firefox \
-        git && \  # Adiciona o git aqui
+        git && \
     apt-get -y -qq remove xfce4-screensaver && \
     mkdir -p /opt/install && \
     chown -R $NB_UID:$NB_GID $HOME /opt/install && \
