@@ -1,8 +1,10 @@
+# Etapa 1: Base da imagem Jupyter
 FROM quay.io/jupyter/base-notebook:2024-12-02
 
+# Etapa 2: Definir o usuário root para permissões administrativas
 USER root
 
-# Instalar dependências necessárias
+# Etapa 3: Instalar dependências do sistema
 RUN apt-get -y -qq update && \
     apt-get -y -qq install \
         dbus-x11 \
@@ -27,19 +29,19 @@ RUN apt-get -y -qq update && \
     chown -R $NB_UID:$NB_GID $HOME /opt/install && \
     rm -rf /var/lib/apt/lists/*
 
-# Instalar servidor VNC
+# Etapa 4: Instalar servidor VNC
 ARG vncserver=tigervnc
 RUN if [ "${vncserver}" = "tigervnc" ]; then \
-        echo "Installing TigerVNC"; \
+        echo "Instalando TigerVNC"; \
         apt-get -y -qq update && \
         apt-get -y -qq install tigervnc-standalone-server && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Instalar TurboVNC (opcional)
+# Etapa 5: Instalar TurboVNC (opcional)
 ENV PATH=/opt/TurboVNC/bin:$PATH
 RUN if [ "${vncserver}" = "turbovnc" ]; then \
-        echo "Installing TurboVNC"; \
+        echo "Instalando TurboVNC"; \
         wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | \
         gpg --dearmor >/etc/apt/trusted.gpg.d/TurboVNC.gpg && \
         wget -O /etc/apt/sources.list.d/TurboVNC.list https://raw.githubusercontent.com/TurboVNC/repo/main/TurboVNC.list && \
@@ -48,21 +50,24 @@ RUN if [ "${vncserver}" = "turbovnc" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
+# Etapa 6: Trocar para o usuário padrão do Jupyter
 USER $NB_USER
 
-# Clonar dois repositórios
+# Etapa 7: Clonar os repositórios necessários
 RUN git clone https://github.com/jupyterhub/jupyter-remote-desktop-proxy.git /opt/install/repo1 && \
     git clone https://github.com/sbrunk/storch.git /opt/install/repo2
-    
-# Combinar os arquivos necessários
+
+# Etapa 8: Combinar arquivos dos repositórios
 RUN cp -r /opt/install/repo2/* /opt/install/repo1/
 
-# Atualizar ambiente Conda
+# Etapa 9: Adicionar o arquivo environment.yml
 COPY --chown=$NB_UID:$NB_GID environment.yml /tmp
+
+# Etapa 10: Atualizar o ambiente Conda
 RUN . /opt/conda/bin/activate && \
     mamba env update --quiet --file /tmp/environment.yml
 
-# Instalar pacotes do repositório combinado
+# Etapa 11: Instalar pacotes do repositório combinado
 RUN . /opt/conda/bin/activate && \
     mamba install -y -q "nodejs>=22" && \
     pip install /opt/install/repo1
