@@ -2,6 +2,7 @@ FROM quay.io/jupyter/base-notebook:2024-12-02
 
 USER root
 
+# Instalar dependências necessárias
 RUN apt-get -y -qq update && \
     apt-get -y -qq install \
         dbus-x11 \
@@ -26,7 +27,7 @@ RUN apt-get -y -qq update && \
     chown -R $NB_UID:$NB_GID $HOME /opt/install && \
     rm -rf /var/lib/apt/lists/*
 
-# Instalação do servidor VNC
+# Instalar servidor VNC
 ARG vncserver=tigervnc
 RUN if [ "${vncserver}" = "tigervnc" ]; then \
         echo "Installing TigerVNC"; \
@@ -35,7 +36,7 @@ RUN if [ "${vncserver}" = "tigervnc" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Instalação do TurboVNC (opcional)
+# Instalar TurboVNC (opcional)
 ENV PATH=/opt/TurboVNC/bin:$PATH
 RUN if [ "${vncserver}" = "turbovnc" ]; then \
         echo "Installing TurboVNC"; \
@@ -49,14 +50,20 @@ RUN if [ "${vncserver}" = "turbovnc" ]; then \
 
 USER $NB_USER
 
-# Instalar o ambiente e pacotes necessários
+# Clonar dois repositórios
+RUN git clone https://github.com/jupyterhub/jupyter-remote-desktop-proxy.git /opt/install/repo1 && \
+    git clone <URL_DO_SEGUNDO_REPOSITORIO> /opt/install/repo2
+
+# Combinar os arquivos necessários
+RUN cp -r /opt/install/repo2/* /opt/install/repo1/
+
+# Atualizar ambiente Conda
 COPY --chown=$NB_UID:$NB_GID environment.yml /tmp
 RUN . /opt/conda/bin/activate && \
     mamba env update --quiet --file /tmp/environment.yml
 
-# Copiar os arquivos do projeto
-COPY --chown=$NB_UID:$NB_GID . /opt/install
+# Instalar pacotes do repositório combinado
 RUN . /opt/conda/bin/activate && \
     mamba install -y -q "nodejs>=22" && \
-    pip install /opt/install
+    pip install /opt/install/repo1
     
