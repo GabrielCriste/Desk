@@ -1,62 +1,95 @@
-# Storch - GPU Accelerated Deep Learning for Scala 3
+# Jupyter Remote Desktop Proxy
 
-Storch is a Scala library for fast tensor computations and deep learning, based on PyTorch.
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jupyterhub/jupyter-remote-desktop-proxy/HEAD?urlpath=desktop)
+[![Test](https://github.com/jupyterhub/jupyter-remote-desktop-proxy/actions/workflows/test.yaml/badge.svg)](https://github.com/jupyterhub/jupyter-remote-desktop-proxy/actions/workflows/test.yaml)
+[![Latest PyPI version](https://img.shields.io/pypi/v/jupyter-remote-desktop-proxy?logo=pypi)](https://pypi.python.org/pypi/jupyter-remote-desktop-proxy)
+[![Issue tracking - GitHub](https://img.shields.io/badge/issue_tracking-github-blue?logo=github)](https://github.com/jupyterhub/jupyter-remote-desktop-proxy/issues)
+[![Help forum - Discourse](https://img.shields.io/badge/help_forum-discourse-blue?logo=discourse)](https://discourse.jupyter.org/c/jupyterhub)
 
-Like PyTorch, Storch provides
-* A NumPy like API for working with tensors
-* GPU support
-* Automatic differentiation
-* A neural network API for building and training neural networks.
+Run XFCE (or other desktop environments) on Jupyter.
 
-Storch aims to close to the Python API to make porting existing models and the life of people already familiar with PyTorch easier.
+This is based on https://github.com/ryanlovett/nbnovnc.
 
-For documentation, see https://storch.dev
+When this extension is launched it will run a Linux desktop on the Jupyter single-user server, and proxy it to your browser using VNC via Jupyter.
 
-## Example:
+![Screenshot of jupyter-remote-desktop-proxy XFCE desktop](https://raw.githubusercontent.com/jupyterhub/jupyter-remote-desktop-proxy/main/tests/reference/desktop.png)
 
-```scala
-val data = Seq(0,1,2,3)
-// data: Seq[Int] = List(0, 1, 2, 3)
-val t1 = torch.Tensor(data)
-// t1: Tensor[Int32] = dtype=int32, shape=[4], device=CPU 
-// [0, 1, 2, 3]
-t1.equal(torch.arange(0,4))
-// res0: Boolean = true
-val t2 = t1.to(dtype=float32)
-// t2: Tensor[Float32] = dtype=float32, shape=[4], device=CPU 
-// [0,0000, 1,0000, 2,0000, 3,0000]
-val t3 = t1 + t2
-// t3: Tensor[Float32] = dtype=float32, shape=[4], device=CPU 
-// [0,0000, 2,0000, 4,0000, 6,0000]
+## VNC Server
 
-val shape = Seq(2l,3l)
-// shape: Seq[Long] = List(2, 3)
-val randTensor = torch.rand(shape)
-// randTensor: Tensor[Float32] = dtype=float32, shape=[2, 3], device=CPU 
-// [[0,4341, 0,9738, 0,9305],
-//  [0,8987, 0,1122, 0,3912]]
-val zerosTensor = torch.zeros(shape, dtype=torch.int64)
-// zerosTensor: Tensor[Int64] = dtype=int64, shape=[2, 3], device=CPU 
-// [[0, 0, 0],
-//  [0, 0, 0]]
+This extension requires a [VNC Server](https://en.wikipedia.org/wiki/Virtual_Network_Computing)
+to be installed on the system (likely, in the container image). The
+most tested VNC server is [TigerVNC](https://tigervnc.org/), while
+[TurboVNC](https://www.turbovnc.org/) also works. Any VNC server available
+in `$PATH` as `vncserver` will be used, but no real testing outside of
+these servers has been performed.
 
-val x = torch.ones(Seq(5))
-// x: Tensor[Float32] = dtype=float32, shape=[5], device=CPU 
-// [1,0000, 1,0000, 1,0000, 1,0000, 1,0000]
-val w = torch.randn(Seq(5, 3), requiresGrad=true)
-// w: Tensor[Float32] = dtype=float32, shape=[5, 3], device=CPU 
-// [[0,8975, 0,5484, 0,2307],
-//  [0,2689, 0,7430, 0,6446],
-//  [0,9503, 0,6342, 0,7523],
-//  [0,5332, 0,7497, 0,3665],
-//  [0,3376, 0,6040, 0,5033]]
-val b = torch.randn(Seq(3), requiresGrad=true)
-// b: Tensor[Float32] = dtype=float32, shape=[3], device=CPU 
-// [0,2638, 0,9697, 0,3664]
-val z = (x matmul w) + b
-// z: Tensor[Float32] = dtype=float32, shape=[3], device=CPU 
-// [3,2513, 4,2490, 2,8640]
+For an example, see the [`Dockerfile`](./Dockerfile) in this repository which installs TigerVNC and XFCE4.
+
+## Installation
+
+1. Install this package itself, with `pip` from `PyPI`:
+
+   ```bash
+   pip install jupyter-remote-desktop-proxy
+   ```
+
+2. Install the packages needed to provide a VNC server and the actual Linux Desktop environment.
+   You need to pick a desktop environment (there are many!) - here are the packages
+   to use TigerVNC and the light-weight [XFCE4](https://www.xfce.org/) desktop environment on Ubuntu 22.04:
+
+   ```
+   dbus-x11
+   xfce4
+   xfce4-panel
+   xfce4-session
+   xfce4-settings
+   xorg
+   xubuntu-icon-theme
+   tigervnc-standalone-server
+   tigervnc-xorg-extension
+   ```
+
+   The recommended way to install these is from your Linux system package manager
+   of choice (such as apt).
+
+## Docker
+
+To spin up such a notebook first build the container:
+
+```bash
+$ docker build -t $(whoami)/$(basename ${PWD}) .
 ```
 
+Now you can run the image:
 
+```bash
+$ docker run --rm --security-opt seccomp=unconfined -p 8888:8888 $(whoami)/$(basename ${PWD})
+Executing the command: jupyter notebook
+[I 12:43:59.148 NotebookApp] Writing notebook server cookie secret to /home/jovyan/.local/share/jupyter/runtime/notebook_cookie_secret
+[I 12:44:00.221 NotebookApp] JupyterLab extension loaded from /opt/conda/lib/python3.7/site-packages/jupyterlab
+[I 12:44:00.221 NotebookApp] JupyterLab application directory is /opt/conda/share/jupyter/lab
+[I 12:44:00.224 NotebookApp] Serving notebooks from local directory: /home/jovyan
+[I 12:44:00.225 NotebookApp] The Jupyter Notebook is running at:
+[I 12:44:00.225 NotebookApp] http://924904e0a646:8888/?token=40475e553b7671b9e93533b97afe584fa2030448505a7d83
+[I 12:44:00.225 NotebookApp]  or http://127.0.0.1:8888/?token=40475e553b7671b9e93533b97afe584fa2030448505a7d83
+[I 12:44:00.225 NotebookApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[C 12:44:00.229 NotebookApp]
 
+    To access the notebook, open this file in a browser:
+        file:///home/jovyan/.local/share/jupyter/runtime/nbserver-8-open.html
+    Or copy and paste one of these URLs:
+        http://924904e0a646:8888/?token=40475e553b7671b9e93533b97afe584fa2030448505a7d83
+     or http://127.0.0.1:8888/?token=40475e553b7671b9e93533b97afe584fa2030448505a7d83
+*snip*
+```
+
+Now head to the URL shown and you will be greated with a XFCE desktop.
+
+Note the `--security-opt seccomp=unconfined` parameter - this is necessary
+to start daemons (such as dbus, pulseaudio, etc) necessary for linux desktop
+to work. This is the option kubernetes runs with by default, so most kubernetes
+based JupyterHubs will not need any modifications for this to work.
+
+## Limitations
+
+1. Desktop applications that require access to OpenGL are currently unsupported.
