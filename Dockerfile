@@ -52,8 +52,8 @@ USER $NB_USER
 
 # Clonar dois repositórios
 RUN git clone https://github.com/jupyterhub/jupyter-remote-desktop-proxy.git /opt/install/repo1 && \
-    git clone <URL_DO_SEGUNDO_REPOSITORIO> /opt/install/repo2
-
+    git clone https://github.com/sbrunk/storch.git /opt/install/repo2
+    
 # Combinar os arquivos necessários
 RUN cp -r /opt/install/repo2/* /opt/install/repo1/
 
