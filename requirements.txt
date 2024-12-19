@@ -1,0 +1,4 @@
+numpy
+torch
+jupyter
+jupyter-remote-desktop-proxy
