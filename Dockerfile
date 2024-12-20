@@ -25,18 +25,14 @@ RUN apt-get -y -qq update && \
 ARG vncserver=tigervnc
 RUN if [ "${vncserver}" = "tigervnc" ]; then \
         echo "Instalando TigerVNC"; \
-        apt-get -y -qq update; \
-        apt-get -y -qq install tigervnc-standalone-server; \
+        apt-get -y -qq install tigervnc-standalone-server && \
         rm -rf /var/lib/apt/lists/*; \
-    fi
-
-ENV PATH=/opt/TurboVNC/bin:$PATH
-RUN if [ "${vncserver}" = "turbovnc" ]; then \
+    elif [ "${vncserver}" = "turbovnc" ]; then \
         echo "Instalando TurboVNC"; \
         wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | gpg --dearmor >/etc/apt/trusted.gpg.d/TurboVNC.gpg; \
         wget -O /etc/apt/sources.list.d/TurboVNC.list https://raw.githubusercontent.com/TurboVNC/repo/main/TurboVNC.list; \
-        apt-get -y -qq update; \
-        apt-get -y -qq install turbovnc; \
+        apt-get -y -qq update && \
+        apt-get -y -qq install turbovnc && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
