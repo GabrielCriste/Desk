@@ -1,12 +1,14 @@
+# Base Image
 FROM quay.io/jupyter/base-notebook:2024-12-02
 
+# Executar comandos como root inicialmente
 USER root
 
+# Atualizar pacotes e instalar dependências básicas (mesclando ambos)
 RUN apt-get -y -qq update \
  && apt-get -y -qq install \
         dbus-x11 \
-        # xclip is added as jupyter-remote-desktop-proxy's tests requires it
-        xclip \
+        xclip \  # Necessário para testes
         xfce4 \
         xfce4-panel \
         xfce4-session \
@@ -14,47 +16,61 @@ RUN apt-get -y -qq update \
         xorg \
         xubuntu-icon-theme \
         fonts-dejavu \
-    # Disable the automatic screenlock since the account password is unknown
+        gettext-base \
+        less \
+        unzip \
+        locales \
+    # Desativar o bloqueio automático de tela do XFCE
  && apt-get -y -qq remove xfce4-screensaver \
-    # chown $HOME to workaround that the xorg installation creates a
-    # /home/jovyan/.cache directory owned by root
-    # Create /opt/install to ensure it's writable by pip
- && mkdir -p /opt/install \
- && chown -R $NB_UID:$NB_GID $HOME /opt/install \
+    # Configuração de permissões
+ && mkdir -p /opt/install /srv/conda \
+ && chown -R $NB_UID:$NB_GID $HOME /opt/install /srv/conda \
  && rm -rf /var/lib/apt/lists/*
 
-# Install a VNC server, either TigerVNC (default) or TurboVNC
+# Instalar um servidor VNC (TigerVNC ou TurboVNC)
 ARG vncserver=tigervnc
 RUN if [ "${vncserver}" = "tigervnc" ]; then \
-        echo "Installing TigerVNC"; \
+        echo "Instalando TigerVNC"; \
         apt-get -y -qq update; \
-        apt-get -y -qq install \
-            tigervnc-standalone-server \
-        ; \
+        apt-get -y -qq install tigervnc-standalone-server; \
         rm -rf /var/lib/apt/lists/*; \
     fi
+
 ENV PATH=/opt/TurboVNC/bin:$PATH
 RUN if [ "${vncserver}" = "turbovnc" ]; then \
-        echo "Installing TurboVNC"; \
-        # Install instructions from https://turbovnc.org/Downloads/YUM
-        wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | \
-        gpg --dearmor >/etc/apt/trusted.gpg.d/TurboVNC.gpg; \
+        echo "Instalando TurboVNC"; \
+        wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | gpg --dearmor >/etc/apt/trusted.gpg.d/TurboVNC.gpg; \
         wget -O /etc/apt/sources.list.d/TurboVNC.list https://raw.githubusercontent.com/TurboVNC/repo/main/TurboVNC.list; \
         apt-get -y -qq update; \
-        apt-get -y -qq install \
-            turbovnc \
-        ; \
+        apt-get -y -qq install turbovnc; \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-USER $NB_USER
+# Configurar o locale
+RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
 
-# Install the environment first, and then install the package separately for faster rebuilds
-COPY --chown=$NB_UID:$NB_GID environment.yml /tmp
+# Definir variáveis de ambiente
+ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8
+ENV CONDA_DIR=/srv/conda NB_PYTHON_PREFIX=${CONDA_DIR}/envs/notebook
+ENV PATH=${NB_PYTHON_PREFIX}/bin:${CONDA_DIR}/bin:${PATH}
+
+# Copiar e instalar o ambiente Conda
+COPY --chown=$NB_UID:$NB_GID environment.yml /tmp/environment.yml
 RUN . /opt/conda/bin/activate && \
     mamba env update --quiet --file /tmp/environment.yml
 
+# Instalar dependências adicionais e ajustar permissões
 COPY --chown=$NB_UID:$NB_GID . /opt/install
 RUN . /opt/conda/bin/activate && \
     mamba install -y -q "nodejs>=22" && \
     pip install /opt/install
+
+# Configuração do usuário
+USER $NB_USER
+
+# Configurar o diretório de trabalho
+WORKDIR /home/$NB_USER
+
+# Entrypoint padrão e comando inicial
+ENTRYPOINT ["/usr/local/bin/repo2docker-entrypoint"]
+CMD ["jupyter", "notebook", "--ip", "0.0.0.0"]
