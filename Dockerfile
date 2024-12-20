@@ -25,6 +25,9 @@ RUN apt-get -y -qq update && \
 ARG vncserver=tigervnc
 RUN if [ "${vncserver}" = "tigervnc" ]; then \
         echo "Instalando TigerVNC"; \
+        # Adicionando o repositório de TigerVNC
+        echo "deb http://archive.ubuntu.com/ubuntu/ focal universe" >> /etc/apt/sources.list && \
+        apt-get -y -qq update && \
         apt-get -y -qq install tigervnc-standalone-server && \
         rm -rf /var/lib/apt/lists/*; \
     elif [ "${vncserver}" = "turbovnc" ]; then \
