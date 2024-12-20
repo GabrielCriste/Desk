@@ -53,10 +53,6 @@ COPY --chown=$NB_UID:$NB_GID environment.yml /tmp/environment.yml
 RUN . /opt/conda/bin/activate && \
     mamba env update --quiet --file /tmp/environment.yml
 
-# Copiar código-fonte para o contêiner
-ENV REPO_DIR=/home/$NB_USER/work
-COPY --chown=1000:1000 src/ ${REPO_DIR}/
-
 # Instalar dependências adicionais e ajustar permissões
 COPY --chown=$NB_UID:$NB_GID . /opt/install
 RUN . /opt/conda/bin/activate && \
@@ -67,7 +63,7 @@ RUN . /opt/conda/bin/activate && \
 USER $NB_USER
 
 # Configurar o diretório de trabalho
-WORKDIR ${REPO_DIR}
+WORKDIR /home/$NB_USER
 
 # Entrypoint padrão e comando inicial
 ENTRYPOINT ["/usr/local/bin/repo2docker-entrypoint"]
