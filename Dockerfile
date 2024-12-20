@@ -1,62 +1,47 @@
 # Base Image
-FROM quay.io/jupyter/base-notebook:2024-12-02
+FROM jupyter/minimal-notebook:latest
 
-# Executar comandos como root inicialmente
+# Definição de ARGs e ENV
+ARG NB_USER=jovyan
+ARG NB_UID=1000
+ARG NB_GID=100
+ENV NB_USER=${NB_USER} \
+    NB_UID=${NB_UID} \
+    NB_GID=${NB_GID} \
+    HOME=/home/${NB_USER}
+
 USER root
 
-# Atualizar pacotes e instalar dependências básicas
-RUN apt-get -y update && apt-get -y install --no-install-recommends \
-    dbus-x11 \
-    xclip \
-    xfce4 \
-    xfce4-panel \
-    xfce4-session \
-    xfce4-settings \
-    xorg \
-    xubuntu-icon-theme \
-    fonts-dejavu \
+# Instalar pacotes básicos e limpar cache do apt
+RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
-    gnupg && \
-    apt-get -y remove xfce4-screensaver && \
-    rm -rf /var/lib/apt/lists/*
+    git \
+    build-essential \
+    python3-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Instalar um servidor VNC (TigerVNC ou TurboVNC)
-ARG vncserver=tigervnc
-RUN if [ "${vncserver}" = "tigervnc" ]; then \
-        echo "Instalando TigerVNC"; \
-        apt-get update && apt-get -y install tigervnc-tools && \
-        rm -rf /var/lib/apt/lists/*; \
-    elif [ "${vncserver}" = "turbovnc" ]; then \
-        echo "Instalando TurboVNC"; \
-        wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | gpg --dearmor -o /etc/apt/trusted.gpg.d/TurboVNC.gpg; \
-        echo "deb https://packagecloud.io/dcommander/turbovnc/ubuntu/ focal main" > /etc/apt/sources.list.d/TurboVNC.list; \
-        apt-get update && apt-get -y install turbovnc && \
-        rm -rf /var/lib/apt/lists/*; \
-    fi
+# Instalar Mamba para gerenciar o Conda
+RUN wget -qO /tmp/micromamba.tar.bz2 https://micromamba.snakepit.net/api/micromamba/linux-64/latest && \
+    tar -xvjf /tmp/micromamba.tar.bz2 -C /usr/local/bin --strip-components=1 bin/micromamba && \
+    rm /tmp/micromamba.tar.bz2
 
-# Configurar o locale
-RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
+ENV PATH="/usr/local/bin:${PATH}"
 
-# Definir variáveis de ambiente
-ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8
-ENV CONDA_DIR=/srv/conda NB_PYTHON_PREFIX=${CONDA_DIR}/envs/notebook
-ENV PATH=${NB_PYTHON_PREFIX}/bin:${CONDA_DIR}/bin:${PATH}
+# Copiar environment.yml e criar ambiente Conda
+COPY --chown=${NB_UID}:${NB_GID} environment.yml /tmp/environment.yml
 
-# Copiar e instalar o ambiente Conda
-COPY --chown=$NB_UID:$NB_GID environment.yml /tmp/environment.yml
-RUN mamba env update --quiet --name base --file /tmp/environment.yml && \
-    mamba clean -a -y
+RUN micromamba install -y --name base -f /tmp/environment.yml && \
+    micromamba clean -a -y && \
+    rm /tmp/environment.yml
 
-# Instalar dependências adicionais e ajustar permissões
-COPY --chown=$NB_UID:$NB_GID . /opt/install
-RUN mamba install -y -q "nodejs>=22" && pip install /opt/install
+# Ajuste de permissões
+RUN fix-permissions /home/${NB_USER}
 
-# Configuração do usuário
-USER $NB_USER
+# Definir o usuário padrão para execução
+USER ${NB_USER}
 
-# Configurar o diretório de trabalho
-WORKDIR /home/$NB_USER
+# Definir diretório de trabalho
+WORKDIR ${HOME}
 
-# Entrypoint padrão e comando inicial
-ENTRYPOINT ["/usr/local/bin/repo2docker-entrypoint"]
-CMD ["jupyter", "notebook", "--ip", "0.0.0.0"]
+# Comando inicial
+CMD ["start-notebook.sh"]
