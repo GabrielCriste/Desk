@@ -1,10 +1,9 @@
-# Use a imagem base oficial do Jupyter
 FROM quay.io/jupyter/base-notebook:2024-12-02
 
-# Use o usuário root para instalar dependências
+# Define variáveis de ambiente para o usuário do notebook
 USER root
 
-# Instale as dependências adicionais necessárias
+# Instala pacotes necessários para o VNC e XFCE4
 RUN apt-get -y -qq update && \
     apt-get -y -qq install \
         dbus-x11 \
@@ -21,38 +20,36 @@ RUN apt-get -y -qq update && \
     chown -R $NB_UID:$NB_GID $HOME /opt/install && \
     rm -rf /var/lib/apt/lists/*
 
-# Instale o servidor VNC (TigerVNC como padrão)
+# Instala o VNC Server
 ARG vncserver=tigervnc
 RUN if [ "${vncserver}" = "tigervnc" ]; then \
-        apt-get -y -qq update && \
-        apt-get -y -qq install tigervnc-standalone-server && \
+        echo "Installing TigerVNC"; \
+        apt-get -y -qq update; \
+        apt-get -y -qq install tigervnc-standalone-server; \
+        rm -rf /var/lib/apt/lists/*; \
+    elif [ "${vncserver}" = "turbovnc" ]; then \
+        echo "Installing TurboVNC"; \
+        wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | gpg --dearmor >/etc/apt/trusted.gpg.d/TurboVNC.gpg; \
+        wget -O /etc/apt/sources.list.d/TurboVNC.list https://raw.githubusercontent.com/TurboVNC/repo/main/TurboVNC.list; \
+        apt-get -y -qq update; \
+        apt-get -y -qq install turbovnc; \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Instale o TurboVNC (opcional)
-RUN if [ "${vncserver}" = "turbovnc" ]; then \
-        wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | \
-        gpg --dearmor >/etc/apt/trusted.gpg.d/TurboVNC.gpg && \
-        wget -O /etc/apt/sources.list.d/TurboVNC.list https://raw.githubusercontent.com/TurboVNC/repo/main/TurboVNC.list && \
-        apt-get -y -qq update && \
-        apt-get -y -qq install turbovnc && \
-        rm -rf /var/lib/apt/lists/*; \
-    fi
-
-# Troque para o usuário jovyan
+# Volta para o usuário padrão do notebook
 USER $NB_USER
 
-# Configure o ambiente Conda a partir de um arquivo YAML
+# Copia o arquivo `environment.yml` para instalar dependências Conda
 COPY --chown=$NB_UID:$NB_GID environment.yml /tmp/
 RUN . /opt/conda/bin/activate && \
     mamba env update --quiet --file /tmp/environment.yml && \
     rm /tmp/environment.yml
 
-# Copie os arquivos do repositório para o diretório de trabalho
+# Copia o conteúdo do diretório `src/` para o diretório de trabalho do usuário no container
 COPY --chown=$NB_UID:$NB_GID src/ /home/jovyan/work/
 
-# Defina o diretório de trabalho
-WORKDIR /home/jovyan/work
+# Adiciona o diretório ao PATH
+ENV PATH="/home/jovyan/work:${PATH}"
 
-# Defina o comando de inicialização padrão
+# Define o comando padrão para iniciar o container
 CMD ["start-notebook.sh"]
