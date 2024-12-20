@@ -1,9 +1,10 @@
+# Base Image
 FROM quay.io/jupyter/base-notebook:2024-12-02
 
-# Define variáveis de ambiente para o usuário do notebook
+# Executar comandos como root inicialmente
 USER root
 
-# Instala pacotes necessários para o VNC e XFCE4
+# Atualizar pacotes e instalar dependências básicas
 RUN apt-get -y -qq update && \
     apt-get -y -qq install \
         dbus-x11 \
@@ -16,19 +17,22 @@ RUN apt-get -y -qq update && \
         xubuntu-icon-theme \
         fonts-dejavu && \
     apt-get -y -qq remove xfce4-screensaver && \
-    mkdir -p /opt/install && \
-    chown -R $NB_UID:$NB_GID $HOME /opt/install && \
+    mkdir -p /opt/install /srv/conda && \
+    chown -R $NB_UID:$NB_GID $HOME /opt/install /srv/conda && \
     rm -rf /var/lib/apt/lists/*
 
-# Instala o VNC Server
+# Instalar um servidor VNC (TigerVNC ou TurboVNC)
 ARG vncserver=tigervnc
 RUN if [ "${vncserver}" = "tigervnc" ]; then \
-        echo "Installing TigerVNC"; \
+        echo "Instalando TigerVNC"; \
         apt-get -y -qq update; \
         apt-get -y -qq install tigervnc-standalone-server; \
         rm -rf /var/lib/apt/lists/*; \
-    elif [ "${vncserver}" = "turbovnc" ]; then \
-        echo "Installing TurboVNC"; \
+    fi
+
+ENV PATH=/opt/TurboVNC/bin:$PATH
+RUN if [ "${vncserver}" = "turbovnc" ]; then \
+        echo "Instalando TurboVNC"; \
         wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | gpg --dearmor >/etc/apt/trusted.gpg.d/TurboVNC.gpg; \
         wget -O /etc/apt/sources.list.d/TurboVNC.list https://raw.githubusercontent.com/TurboVNC/repo/main/TurboVNC.list; \
         apt-get -y -qq update; \
@@ -36,20 +40,35 @@ RUN if [ "${vncserver}" = "tigervnc" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Volta para o usuário padrão do notebook
+# Configurar o locale
+RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
+
+# Definir variáveis de ambiente
+ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8
+ENV CONDA_DIR=/srv/conda NB_PYTHON_PREFIX=${CONDA_DIR}/envs/notebook
+ENV PATH=${NB_PYTHON_PREFIX}/bin:${CONDA_DIR}/bin:${PATH}
+
+# Copiar e instalar o ambiente Conda
+COPY --chown=$NB_UID:$NB_GID environment.yml /tmp/environment.yml
+RUN . /opt/conda/bin/activate && \
+    mamba env update --quiet --file /tmp/environment.yml
+
+# Copiar código-fonte para o contêiner
+ENV REPO_DIR=/home/$NB_USER/work
+COPY --chown=1000:1000 src/ ${REPO_DIR}/
+
+# Instalar dependências adicionais e ajustar permissões
+COPY --chown=$NB_UID:$NB_GID . /opt/install
+RUN . /opt/conda/bin/activate && \
+    mamba install -y -q "nodejs>=22" && \
+    pip install /opt/install
+
+# Configuração do usuário
 USER $NB_USER
 
-# Copia o arquivo `environment.yml` para instalar dependências Conda
-COPY --chown=$NB_UID:$NB_GID environment.yml /tmp/
-RUN . /opt/conda/bin/activate && \
-    mamba env update --quiet --file /tmp/environment.yml && \
-    rm /tmp/environment.yml
+# Configurar o diretório de trabalho
+WORKDIR ${REPO_DIR}
 
-# Copia o conteúdo do diretório `src/` para o diretório de trabalho do usuário no container
-COPY --chown=$NB_UID:$NB_GID src/ /home/jovyan/work/
-
-# Adiciona o diretório ao PATH
-ENV PATH="/home/jovyan/work:${PATH}"
-
-# Define o comando padrão para iniciar o container
-CMD ["start-notebook.sh"]
+# Entrypoint padrão e comando inicial
+ENTRYPOINT ["/usr/local/bin/repo2docker-entrypoint"]
+CMD ["jupyter", "notebook", "--ip", "0.0.0.0"]
