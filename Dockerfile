@@ -5,37 +5,32 @@ FROM quay.io/jupyter/base-notebook:2024-12-02
 USER root
 
 # Atualizar pacotes e instalar dependências básicas
-RUN apt-get -y -qq update && \
-    apt-get -y -qq install \
-        dbus-x11 \
-        xclip \
-        xfce4 \
-        xfce4-panel \
-        xfce4-session \
-        xfce4-settings \
-        xorg \
-        xubuntu-icon-theme \
-        fonts-dejavu && \
-    apt-get -y -qq remove xfce4-screensaver && \
-    mkdir -p /opt/install /srv/conda && \
-    chown -R $NB_UID:$NB_GID $HOME /opt/install /srv/conda && \
+RUN apt-get -y update && apt-get -y install --no-install-recommends \
+    dbus-x11 \
+    xclip \
+    xfce4 \
+    xfce4-panel \
+    xfce4-session \
+    xfce4-settings \
+    xorg \
+    xubuntu-icon-theme \
+    fonts-dejavu \
+    wget \
+    gnupg && \
+    apt-get -y remove xfce4-screensaver && \
     rm -rf /var/lib/apt/lists/*
 
 # Instalar um servidor VNC (TigerVNC ou TurboVNC)
 ARG vncserver=tigervnc
 RUN if [ "${vncserver}" = "tigervnc" ]; then \
         echo "Instalando TigerVNC"; \
-        # Adicionando o repositório de TigerVNC
-        echo "deb http://archive.ubuntu.com/ubuntu/ focal universe" >> /etc/apt/sources.list && \
-        apt-get -y -qq update && \
-        apt-get -y -qq install tigervnc-standalone-server && \
+        apt-get update && apt-get -y install tigervnc-tools && \
         rm -rf /var/lib/apt/lists/*; \
     elif [ "${vncserver}" = "turbovnc" ]; then \
         echo "Instalando TurboVNC"; \
-        wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | gpg --dearmor >/etc/apt/trusted.gpg.d/TurboVNC.gpg; \
-        wget -O /etc/apt/sources.list.d/TurboVNC.list https://raw.githubusercontent.com/TurboVNC/repo/main/TurboVNC.list; \
-        apt-get -y -qq update && \
-        apt-get -y -qq install turbovnc && \
+        wget -q -O- https://packagecloud.io/dcommander/turbovnc/gpgkey | gpg --dearmor -o /etc/apt/trusted.gpg.d/TurboVNC.gpg; \
+        echo "deb https://packagecloud.io/dcommander/turbovnc/ubuntu/ focal main" > /etc/apt/sources.list.d/TurboVNC.list; \
+        apt-get update && apt-get -y install turbovnc && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
@@ -49,14 +44,12 @@ ENV PATH=${NB_PYTHON_PREFIX}/bin:${CONDA_DIR}/bin:${PATH}
 
 # Copiar e instalar o ambiente Conda
 COPY --chown=$NB_UID:$NB_GID environment.yml /tmp/environment.yml
-RUN . /opt/conda/bin/activate && \
-    mamba env update --quiet --file /tmp/environment.yml
+RUN mamba env update --quiet --file /tmp/environment.yml && \
+    mamba clean -a -y
 
 # Instalar dependências adicionais e ajustar permissões
 COPY --chown=$NB_UID:$NB_GID . /opt/install
-RUN . /opt/conda/bin/activate && \
-    mamba install -y -q "nodejs>=22" && \
-    pip install /opt/install
+RUN mamba install -y -q "nodejs>=22" && pip install /opt/install
 
 # Configuração do usuário
 USER $NB_USER
