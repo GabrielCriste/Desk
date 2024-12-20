@@ -44,7 +44,7 @@ ENV PATH=${NB_PYTHON_PREFIX}/bin:${CONDA_DIR}/bin:${PATH}
 
 # Copiar e instalar o ambiente Conda
 COPY --chown=$NB_UID:$NB_GID environment.yml /tmp/environment.yml
-RUN mamba env update --quiet --file /tmp/environment.yml && \
+RUN mamba env update --quiet --name base --file /tmp/environment.yml && \
     mamba clean -a -y
 
 # Instalar dependências adicionais e ajustar permissões
